@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  ai-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-app-container
+    tty: true
+    volumes:
+      - "./scripts:/home/data-viz/scripts"
