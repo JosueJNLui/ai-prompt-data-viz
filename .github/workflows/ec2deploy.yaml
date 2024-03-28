@@ -1,8 +1,13 @@
 name: Build on DockerHub and Deploy to AWS
 on:
-  push: 
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      action:
+        required: true
+        default: 'deploy'
+  # push: 
+  #   branches:
+  #     - main
 env:
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -13,6 +18,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.action == 'deploy' }}
     steps:
       - name: Checkout the source code
         uses: actions/checkout@v2
