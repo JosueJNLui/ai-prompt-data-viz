@@ -1,0 +1,78 @@
+name: Build on DockerHub and Deploy to AWS
+on:
+  push: 
+    branches:
+      - main
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  AWS_PRIVATE_KEY: ${{ secrets.AWS_PRIVATE_KEY }}
+  AWS_INSTANCE_SG_ID: ${{ secrets.AWS_INSTANCE_SG_ID }}
+  AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+  AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the source code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: ./
+          push: true
+          dockerfile: ./Dockerfile
+          tags: josuelui/ai-prompt-data-viz:latest
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+      - name: Configure aws credentials
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_KEY }}
+          aws-region: us-east-2
+      - name: Get the runner ip address
+        id: ip
+        uses: haythem/public-ip@v1.2
+      - name: Whitelist runner ip address
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id $AWS_INSTANCE_SG_ID \
+            --protocol tcp \
+            --port 22 \
+            --cidr ${{ steps.ip.outputs.ipv4 }}/32
+      - name: Set permissions for private key
+        run: |
+          echo "${{ env.AWS_PRIVATE_KEY }}" > key.pem
+          chmod 600 key.pem
+      - name: Pull Docker image
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ubuntu@3.23.124.238 'sudo docker pull ${{ DOCKERHUB_USERNAME }}/ai-prompt-data-viz:latest'
+      - name: Stop running container
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ubuntu@3.23.124.238 'sudo docker stop ai-prompt-data-viz || true'
+          ssh -o StrictHostKeyChecking=no -i ubuntu@3.23.124.238 'sudo docker rm ai-prompt-data-viz || true'
+      - name: Run new container
+        ssh -o StrictHostKeyChecking=no -i ubuntu@3.23.124.238 'sudo docker run -d --name ai-prompt-data-viz -p 8501:8501 ${{ DOCKERHUB_USERNAME }}/ai-prompt-data-viz:latest'
+      - name: Revoke runner ip address
+        run: |
+          aws ec2 evoke-security-group-ingress \
+          --group-id $AWS_INSTANCE_SG_ID \
+          --protocol tcp \
+          --port 22 \
+          --cidr ${{ steps.ip.outputs.ipv4 }}/32
