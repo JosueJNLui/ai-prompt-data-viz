@@ -6,6 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: ai-app-container
+    ports:
+      - "8501:8501"
     tty: true
     volumes:
       - "./scripts:/home/data-viz/scripts"
