@@ -69,11 +69,11 @@ jobs:
 
       - name: Installing rsync
         run: |
-          apt install -y rsync
+          sudo apt install -y rsync
 
       - name: Installing ssh command
         run: |
-          apt install -y openssh-client
+          sudo apt install -y openssh-client
 
       - name: Deploy to the environment
         run: |
