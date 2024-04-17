@@ -10,6 +10,8 @@ resource "aws_instance" "this" {
   key_name               = aws_key_pair.kp.key_name
   vpc_security_group_ids = local.security_groups_ids
 
+  user_data = local.user_data
+
   tags = {
     Name = local.instance_name
   }

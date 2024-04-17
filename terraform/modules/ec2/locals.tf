@@ -6,4 +6,5 @@ locals {
   subnet_id           = var.subnet_id
   security_groups_ids = var.security_groups_ids
   instance_name       = var.instance_name
+  user_data           = var.user_data
 }
