@@ -15,4 +15,5 @@ locals {
   public_subnet_cidr_block = "10.0.1.0/24"
   availability_zone        = "us-east-2a"
   cidr_blocks_ingress_sg   = ["0.0.0.0/0"] #It was used private ipv4 address as the sake of the project
+  instance_name = "${var.project_name}"
 }

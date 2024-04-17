@@ -9,6 +9,10 @@ resource "aws_instance" "this" {
   subnet_id              = local.subnet_id
   key_name               = aws_key_pair.kp.key_name
   vpc_security_group_ids = local.security_groups_ids
+
+  tags = {
+    Name = local.instance_name
+  }
 }
 
 resource "aws_eip" "web_eip" {
