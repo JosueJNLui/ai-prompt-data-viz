@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    command: bash -c "streamlit run scripts/app.py"
     container_name: ai-prompt-data-viz
     ports:
       - "8501:8501"
