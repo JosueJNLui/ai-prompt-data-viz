@@ -80,10 +80,22 @@ jobs:
           PUBLIC_IP=${{ steps.get_public_ip.outputs.public_ip }}
           rsync -ahrvz --exclude='.git/' --exclude='.gitignore' --exclude='.terraform' --exclude='.terraform.lock.hcl' --exclude='terraform.tfstate.d' -e "ssh -i key.pem -o StrictHostKeyChecking=no" * ubuntu@$PUBLIC_IP:/home/ubuntu/ai-prompt-data-viz/
 
-      - name: Restart running container
+      - name: Stop running container
         run: |
           PUBLIC_IP=${{ steps.get_public_ip.outputs.public_ip }}
-          ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'sudo docker restart ${{ env.PROJECT_NAME }} || true'
+          ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP '\
+          CONTAINER_ID=$(sudo docker ps -aqf "name='${{ env.PROJECT_NAME }}'")
+          if [ -n "$CONTAINER_ID" ]; then
+            echo "Stopping container $CONTAINER_ID"
+            sudo docker stop $CONTAINER_ID
+          else
+            echo "Container does not exist, nothing to do."
+          fi'
+
+      - name: Run the container
+        run: |
+          PUBLIC_IP=${{ steps.get_public_ip.outputs.public_ip }}
+          ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'sudo PROJECT_NAME='${{ env.PROJECT_NAME }}' docker compose -f ./ai-prompt-data-viz/docker-compose.yml up -d || true'
 
       - name: Revoke runner ip address
         run: |

@@ -33,3 +33,9 @@ variable "instance_name" {
   description = "The name assigned to the EC2 instance"
   type = string
 }
+
+variable "user_data" {
+  description = "User data to provide when launching the instance"
+  type = string
+  default = ""
+}
