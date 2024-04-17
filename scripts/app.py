@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
-from pandasai import SmartDataframe
-from pandasai.llm import OpenAI
+# from pandasai import SmartDataframe
+# from pandasai.llm import OpenAI
 import os
 from dotenv import load_dotenv
 
@@ -59,4 +59,3 @@ with st.container():
         st.write(f"""
         {response}
         """)
-    

@@ -7,4 +7,5 @@ module "ec2" {
   instance_type       = local.instance_type
   subnet_id           = local.subnet_id
   security_groups_ids = local.security_groups_ids
+  instance_name       = local.instance_name
 }

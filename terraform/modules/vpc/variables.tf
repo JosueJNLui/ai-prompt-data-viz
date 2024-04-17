@@ -18,3 +18,8 @@ variable "cidr_blocks_ingress_sg" {
   type        = list(string)
   default     = []
 }
+
+variable "project_name" {
+  description = "Project's name"
+  type        = string
+}

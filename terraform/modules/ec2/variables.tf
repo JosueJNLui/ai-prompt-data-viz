@@ -28,3 +28,8 @@ variable "security_groups_ids" {
   type        = list(string)
   default = []
 }
+
+variable "instance_name" {
+  description = "The name assigned to the EC2 instance"
+  type = string
+}

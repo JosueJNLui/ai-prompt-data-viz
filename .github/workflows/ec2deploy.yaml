@@ -5,81 +5,91 @@ on:
       action:
         required: true
         default: 'deploy'
-  # push: 
-  #   branches:
-  #     - main
 env:
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   AWS_PRIVATE_KEY: ${{ secrets.AWS_PRIVATE_KEY }}
-  AWS_INSTANCE_SG_ID: ${{ secrets.AWS_INSTANCE_SG_ID }}
   AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
   AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+  PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
 jobs:
   build:
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.action == 'deploy' }}
-    steps:
-      - name: Checkout the source code
-        uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v2
-        with:
-          context: ./
-          push: true
-          dockerfile: ./Dockerfile
-          tags: josuelui/ai-prompt-data-viz:latest
-  deploy:
-    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ env.DOCKERHUB_USERNAME }}
-          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Install AWS CLI
+        run: |
+          apt update
+          apt install -y awscli
+
       - name: Configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ env.AWS_SECRET_KEY }}
           aws-region: us-east-2
-      - name: Get the runner ip address
+
+      - name: Get the runner public ip address
         id: ip
-        uses: haythem/public-ip@v1.2
-      - name: Whitelist runner ip address
+        uses: haythem/public-ip@v1.3
+
+      - name: Get public ipv4 from the ec2 instance
+        id: get_public_ip
         run: |
+          PUBLIC_IP=$(aws ec2 \
+          describe-instances \
+          --filters "Name=tag:Name,Values=$PROJECT_NAME" \
+          --query 'Reservations[*].Instances[*].PublicIpAddress' \
+          --output text)
+          echo "::set-output name=public_ip::$PUBLIC_IP"
+
+      - name: Get the security group ID
+        id: get_security_group_id
+        run: |
+          SG_ID=$(aws ec2 \
+          describe-instances \
+          --filters "Name=tag:Name,Values=$PROJECT_NAME" \
+          --query 'Reservations[*].Instances[*].SecurityGroups[*].GroupId' \
+          --output text)
+          echo "::set-output name=sg_id::$SG_ID"
+
+      - name: Authorize the ip address from the runner
+        run: |
+          SG_ID=${{ steps.get_security_group_id.outputs.sg_id }}
           aws ec2 authorize-security-group-ingress \
-            --group-id $AWS_INSTANCE_SG_ID \
+            --group-id $SG_ID \
             --protocol tcp \
             --port 22 \
             --cidr ${{ steps.ip.outputs.ipv4 }}/32
+      
       - name: Set permissions for private key
         run: |
           echo "${{ env.AWS_PRIVATE_KEY }}" > key.pem
           chmod 600 key.pem
-      - name: Pull Docker image
+
+      - name: Installing rsync
         run: |
-          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@3.23.124.238 'sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-prompt-data-viz:latest'
-      - name: Stop running container
+          apt install -y rsync
+
+      - name: Installing ssh command
         run: |
-          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@3.23.124.238 'sudo docker stop ai-prompt-data-viz || true'
-          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@3.23.124.238 'sudo docker rm ai-prompt-data-viz || true'
-      - name: Run new container
+          apt install -y openssh-client
+
+      - name: Deploy to the environment
         run: |
-          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@3.23.124.238 'sudo docker run -d --name ai-prompt-data-viz -p 8501:8501 ${{ secrets.DOCKERHUB_USERNAME }}/ai-prompt-data-viz:latest'
+          PUBLIC_IP=${{ steps.get_public_ip.outputs.public_ip }}
+          rsync -ahrvz --exclude='.git/' --exclude='.gitignore' --exclude='.terraform' --exclude='.terraform.lock.hcl' --exclude='terraform.tfstate.d' -e "ssh -i key.pem -o StrictHostKeyChecking=no" * ubuntu@$PUBLIC_IP:/home/ubuntu/ai-prompt-data-viz/
+
+      - name: Restart running container
+        run: |
+          PUBLIC_IP=${{ steps.get_public_ip.outputs.public_ip }}
+          ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'sudo docker restart ${{ env.PROJECT_NAME }} || true'
+
       - name: Revoke runner ip address
         run: |
-          aws ec2 evoke-security-group-ingress \
-          --group-id $AWS_INSTANCE_SG_ID \
+          SG_ID=${{ steps.get_security_group_id.outputs.sg_id }}
+          aws ec2 revoke-security-group-ingress \
+          --group-id $SG_ID \
           --protocol tcp \
           --port 22 \
           --cidr ${{ steps.ip.outputs.ipv4 }}/32
